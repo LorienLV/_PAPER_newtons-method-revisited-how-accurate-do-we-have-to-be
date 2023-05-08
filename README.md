@@ -1,12 +1,21 @@
+s
 # [PAPER] Newton's method revisited: How accurate do we have to be?
 
-This repository contains the code used to generate the data for Figures 1, 2, 3, 4, 5, and 6 of the paper titled [Newton's method revisited: How accurate do we have to be?](TODO). The repository contains the MATLAB codes necessary to compute square roots and generate Figure 1. The repository contains a modified version of GROMACS-2021 that implements the solvers presented in the paper as an alternative to the default ones, SHAKE and P-LINCS. It also contains the required files to run the [Lysozyme in water simulation](https://www.mdtutorials.com/gmx/lysozyme/) described in the paper.
+This repository contains the code used to generate the data for Figures 1, 2, 3, 4, 5, and 6 of the paper titled [Newton's method revisited: How accurate do we have to be?](TODO).
+
+The repository contains the MATLAB codes necessary to compute square roots and generate Figure 1. The repository contains the data and MATLAB codes nessary to generate Figures 2a, 2b, and 3.
+
+The repository contains a modified version of GROMACS-2021 that implements the solvers presented in the paper as an alternative to the default ones, SHAKE and P-LINCS. It also contains the required files to run the [Lysozyme in water simulation](https://www.mdtutorials.com/gmx/lysozyme/) described in the paper.
+
+MATLAB is a commercial product and the property of MathWorks, hence it cannot be included in this repository.
+MATLAB Version: 9.9.0.1495850 (R2020b) Update 1 was used to generate Figures 1, 2a, 2b, and 3.
+
 
 # Abstract
 
 We analyze the convergence of quasi-Newton methods in exact and finite precision arithmetic using three different techniques. We derive an upper bound for the stagnation level and we show that any sufficiently exact quasi-Newton method will converge quadratically until stagnation. In the absence of sufficient accuracy, we are likely to retain rapid linear convergence. We confirm our analysis by computing square roots and solving bond constraint equations in the context of molecular dynamics. In particular, we apply both a symmetric variant and Forsgren's variant of the simplified Newton method. This work has implications for the implementation of quasi-Newton methods regardless of the scale of the calculation or the machine.
 
-# Computing square roots.
+# Section 6.2.1: Computing square roots, 
 
 The folder "simulations" contains a subfolder called "square-roots" with this content:
 square-roots
@@ -19,8 +28,22 @@ square-roots
 The script figure_1 generates file figure_1.pdf using the MATLAB function newton_sqrt.
 The script figure_1 assumes that current directory is square-roots/matlab.
 
-MATLAB is a commercial product and the property of MathWorks, hence it cannot be included in this repository.
-MATLAB Version: 9.9.0.1495850 (R2020b) Update 1 was used to generate the figure.
+# Section 6.2.2: A quasi-Newton method with a fixed symmetric approximation of the Jacobian
+The folder "simulations" constains a subfolder called "lysozyme" which includes this content
+
+├── data
+│   ├── normEk.txt
+│   ├── reshis.txt
+│   └── rk.txt
+├── fig
+│   ├── figure_2a.pdf
+│   ├── figure_2b.pdf
+│   └── figure_3.pdf
+├── matlab
+│   └── figure_2_and_3.m
+
+The script figure_2_and_3 generates Figure 2a, Figure 2b and Figure 3 from the data stored in the folder data.
+The data was generated with software included in this repository.
 
 
 # Modified GROMACS
