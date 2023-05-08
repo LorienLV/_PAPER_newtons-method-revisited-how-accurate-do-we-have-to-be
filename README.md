@@ -1,10 +1,27 @@
 # [PAPER] Newton's method revisited: How accurate do we have to be?
 
-This repository contains the code used to generate Figures 2, 3, 4, 5, and 6 of the paper titled [Newton's method revisited: How accurate do we have to be?](TODO). The repository contains a modified version of GROMACS-2021 that implements the solvers presented in the paper as an alternative to the default ones, SHAKE and P-LINCS. It also contains the required files to run the [Lysozyme in water simulation](https://www.mdtutorials.com/gmx/lysozyme/) described in the paper.
+This repository contains the code used to generate the data for Figures 1, 2, 3, 4, 5, and 6 of the paper titled [Newton's method revisited: How accurate do we have to be?](TODO). The repository contains the MATLAB codes necessary to compute square roots and generate Figure 1. The repository contains a modified version of GROMACS-2021 that implements the solvers presented in the paper as an alternative to the default ones, SHAKE and P-LINCS. It also contains the required files to run the [Lysozyme in water simulation](https://www.mdtutorials.com/gmx/lysozyme/) described in the paper.
 
 # Abstract
 
 We analyze the convergence of quasi-Newton methods in exact and finite precision arithmetic using three different techniques. We derive an upper bound for the stagnation level and we show that any sufficiently exact quasi-Newton method will converge quadratically until stagnation. In the absence of sufficient accuracy, we are likely to retain rapid linear convergence. We confirm our analysis by computing square roots and solving bond constraint equations in the context of molecular dynamics. In particular, we apply both a symmetric variant and Forsgren's variant of the simplified Newton method. This work has implications for the implementation of quasi-Newton methods regardless of the scale of the calculation or the machine.
+
+# Computing square roots.
+
+The folder "simulations" contains a subfolder called "square-roots" with this content:
+square-roots
+├── fig
+│   └── figure_1.pdf
+└── matlab
+    ├── figure_1.m
+    └── newton_sqrt.m
+
+The script figure_1 generates file figure_1.pdf using the MATLAB function newton_sqrt.
+The script figure_1 assumes that current directory is square-roots/matlab.
+
+MATLAB is a commercial product and the property of MathWorks, hence it cannot be included in this repository.
+MATLAB Version: 9.9.0.1495850 (R2020b) Update 1 was used to generate the figure.
+
 
 # Modified GROMACS
 
@@ -12,7 +29,7 @@ The majority of the code added to GROMACS can be found in [Ilves.h](GROMACS/src/
 
 # Installation of GROMACS
 
-To install GROMACS, you can follow the [installation guide provided by GROMACS](https://manual.gromacs.org/documentation/2021/install-guide/index.html). **It is essential to generate a double-precision installation** in order to be able to use the constraint solvers with low tolerances. This is achieved by appending the flag `-DGMX_DOUBLE=on` to the CMake command.
+To install GROMACS, you can follow the [installation guide provided by GROMACS](https://manual.gromacs.org/documentation/2021/install-guide/index.html). **It is essential to generate a double-precision installation** in order to be able to use the constraint solvers with tiny tolerances. This is achieved by appending the flag `-DGMX_DOUBLE=on` to the CMake command.
 
 ## Installation Example:
 ```
@@ -33,7 +50,7 @@ We recommend using the [simulations/lysozyme/md.mdp](simulations/lysozyme/md.mdp
 
 ## Run Accuracy Simulation
 
-The accuracy simulations will produce three files: `newton.txt`, `quasi.txt`, and `forsgren.txt`. These files will contain the accuracy results of Newton's, Quasi-Newton's, and Frogren's methods, respectively.
+The accuracy simulations will produce three files: `newton.txt`, `quasi.txt`, and `forsgren.txt`. These files will contain the accuracy results of Newton's, Quasi-Newton's, and Forsgren's methods, respectively.
 
 The files contain seven columns and one line per time-step and constraint-algorithm iteration. Description of the columns:
 
@@ -76,5 +93,5 @@ gmx_d grompp -f "tpr.tpr" -c "npt.gro" -r "npt.gro" -t "npt.cpt" -p "topol.top" 
 gmx_d mdrun -ntmpi 1 -s "tpr.tpr" -noconfout -nsteps 50000 -g gromacs.log
 ```
 
-# Cite Us
-TODO
+# How to Cite Us
+TODO: When the manuscript has been accepted and the infomation is available.
