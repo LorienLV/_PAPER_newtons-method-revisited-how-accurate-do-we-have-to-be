@@ -52,7 +52,7 @@ source /usr/local/gromacs/bin/GMXRC
 
 ## Section 6.2.2: A quasi-Newton method with a fixed symmetric approximation of the Jacobian
 
-The folder "simulations" constains a subfolder called "lysozyme" which includes this content
+The folder "simulations" contains a subfolder called "lysozyme" which includes this content
 
 ```
 ├── data
