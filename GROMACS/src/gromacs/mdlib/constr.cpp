@@ -203,7 +203,7 @@ public:
 
     // ILVES START
 
-    bool use_ilves;
+    int ilves_experiment;
     bool ilves_print;
     // Number of steps that elapse between printing the constraints verbose
     // output
@@ -500,7 +500,7 @@ bool Constraints::Impl::apply(bool bLog,
         }
     }
 
-    if (lincsd != nullptr && !use_ilves) {
+    if (lincsd != nullptr && ilves_experiment == 0) {
         bOK = constrain_lincs(bLog || bEner,
                               ir,
                               step,
@@ -535,7 +535,7 @@ bool Constraints::Impl::apply(bool bLog,
         }
     }
 
-    if (shaked != nullptr && !use_ilves) {
+    if (shaked != nullptr && ilves_experiment == 0) {
         bOK = constrain_shake(log,
                               shaked.get(),
                               inverseMasses_,
@@ -567,7 +567,7 @@ bool Constraints::Impl::apply(bool bLog,
     }
 
     // ILVES
-    if (use_ilves) {
+    if (ilves_experiment > 0) {
         if (econq != ConstraintVariable::Positions) {
             gmx_fatal(FARGS,
                       "Internal error, ILVES called for constraining something "
@@ -580,37 +580,32 @@ bool Constraints::Impl::apply(bool bLog,
 
         const int maxit = 16;
 
-        if (nsconstraints_output > 0 && step % nsconstraints_output == 0) {
-            int niters;
-            bOK = ilves->solve_all(step,
-                                   niters,
-                                   x.unpaddedArrayRef(),
-                                   xprime.unpaddedArrayRef(),
-                                   v.unpaddedArrayRef(),
-                                   ir.shake_tol,
-                                   maxit,
-                                   scaled_delta_t,
-                                   computeVirial,
-                                   constraintsVirial,
-                                   !v.empty(),
-                                   pbc_null,
-                                   ilves_print);
-        }
-        else {
+        // Section 6.2.2
+        if (ilves_experiment == 1) {
+            if (nsconstraints_output > 0 && step % nsconstraints_output == 0) {
+                int niters;
+                bOK = ilves->solve_6_2_2(x.unpaddedArrayRef(),
+                                         xprime.unpaddedArrayRef(),
+                                         v.unpaddedArrayRef(),
+                                         ir.shake_tol,
+                                         maxit,
+                                         constraintsVirial,
+                                         pbc_null);
+            }
             int niters;
             bOK = ilves->solve_newton(step,
-                                      niters,
-                                      x.unpaddedArrayRef(),
-                                      xprime.unpaddedArrayRef(),
-                                      v.unpaddedArrayRef(),
-                                      0.00000001,
-                                      maxit,
-                                      scaled_delta_t,
-                                      computeVirial,
-                                      constraintsVirial,
-                                      !v.empty(),
-                                      pbc_null,
-                                      false);
+                                    niters,
+                                    x.unpaddedArrayRef(),
+                                    xprime.unpaddedArrayRef(),
+                                    v.unpaddedArrayRef(),
+                                    0.00000001,
+                                    maxit,
+                                    scaled_delta_t,
+                                    computeVirial,
+                                    constraintsVirial,
+                                    !v.empty(),
+                                    pbc_null,
+                                    false);
 
             if (!bOK && maxwarn < INT_MAX) {
                 if (log != nullptr) {
@@ -623,6 +618,53 @@ bool Constraints::Impl::apply(bool bLog,
                 bDump = TRUE;
             }
         }
+        // Section 6.2.3
+        else {
+            if (nsconstraints_output > 0 && step % nsconstraints_output == 0) {
+                int niters;
+                bOK = ilves->solve_6_2_3(step,
+                                    niters,
+                                    x.unpaddedArrayRef(),
+                                    xprime.unpaddedArrayRef(),
+                                    v.unpaddedArrayRef(),
+                                    ir.shake_tol,
+                                    maxit,
+                                    scaled_delta_t,
+                                    computeVirial,
+                                    constraintsVirial,
+                                    !v.empty(),
+                                    pbc_null,
+                                    ilves_print);
+            }
+            else {
+                int niters;
+                bOK = ilves->solve_newton(step,
+                                        niters,
+                                        x.unpaddedArrayRef(),
+                                        xprime.unpaddedArrayRef(),
+                                        v.unpaddedArrayRef(),
+                                        0.00000001,
+                                        maxit,
+                                        scaled_delta_t,
+                                        computeVirial,
+                                        constraintsVirial,
+                                        !v.empty(),
+                                        pbc_null,
+                                        false);
+
+                if (!bOK && maxwarn < INT_MAX) {
+                    if (log != nullptr) {
+                        fprintf(
+                            log,
+                            "Error > Tolerance in ILVES at step %s (this is OK if "
+                            "you are setting a low tolerance to print results)\n",
+                            gmx_step_str(step, buf));
+                    }
+                    bDump = TRUE;
+                }
+            }
+        }
+
     }
     // END ILVES
 
@@ -1022,7 +1064,7 @@ void Constraints::Impl::setConstraints(gmx_localtop_t* top,
 
     if (ncon_tot > 0) {
         // ILVES
-        if (use_ilves) {
+        if (ilves_experiment > 0) {
             // Populate the molecule structure.
             mol = std::make_unique<molecule_t>();
 
@@ -1188,13 +1230,12 @@ Constraints::Impl::Impl(const gmx_mtop_t& mtop_p,
     // ILVES
 
     // Read the enviromental variable USE_ILVES
-    char* USE_ILVES_ev = std::getenv("USE_ILVES");
-    if (USE_ILVES_ev == NULL) {
-        use_ilves = false;
+    char* ILVES_EXPERIMENT_ev = std::getenv("ILVES_EXPERIMENT");
+    if (ILVES_EXPERIMENT_ev == NULL) {
+        ilves_experiment = 0;
     }
     else {
-        int USE_ILVES_int = atoi(USE_ILVES_ev);
-        use_ilves = (USE_ILVES_int > 0) ? true : false;
+        ilves_experiment = atoi(ILVES_EXPERIMENT_ev);
     }
 
     // Read the enviromental variable ILVES_PRINT

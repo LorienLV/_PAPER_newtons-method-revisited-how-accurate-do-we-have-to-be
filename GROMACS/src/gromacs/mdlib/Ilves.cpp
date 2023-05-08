@@ -100,20 +100,20 @@ gmx::Ilves::Ilves(molecule_t *const mol) : mol(mol) {
     A_forsgren_init = A_newton;
     A_forsgren = A_newton;
 
-    // Symmetric matrix for the quasi-Newton method.
+    // Symmetric matrix for the simpl-Newton method.
 
-    A_quasi.n = mol->n;
+    A_simpl.n = mol->n;
 
-    A_quasi.temp_work.resize(A_quasi.n, 0);
+    A_simpl.temp_work.resize(A_simpl.n, 0);
 
     // Construct the Upper triangular CRS representation of AS.
 
     idx = 0;
     size_t weights_idx = 0;
 
-    A_quasi.indexes.push_back(idx);
+    A_simpl.indexes.push_back(idx);
 
-    for (size_t row = 0; row < A_quasi.n; ++row) {
+    for (size_t row = 0; row < A_simpl.n; ++row) {
         // Loop over the nonzeros in the rowth row
         for (int l = mol->bond_graph->xadj[row];
              l < mol->bond_graph->xadj[row + 1];
@@ -124,26 +124,32 @@ gmx::Ilves::Ilves(molecule_t *const mol) : mol(mol) {
             // We only need the sparsity pattern of the upper triangular part
             // of the adjacency matrix.
             if (col >= row) {
-                A_quasi.rows.push_back(row);
-                A_quasi.cols.push_back(col);
+                A_simpl.rows.push_back(row);
+                A_simpl.cols.push_back(col);
 
-                A_quasi.weights.push_back(mol->weights[weights_idx]);
+                A_simpl.weights.push_back(mol->weights[weights_idx]);
 
                 ++idx;
             }
         }
-        A_quasi.indexes.push_back(idx);
+        A_simpl.indexes.push_back(idx);
     }
 
-    A_quasi.data.resize(idx);
+    A_simpl.data.resize(idx);
+
+    A_quasi = A_simpl;
 
     // Temporal arrays for Forsgren's method.
     dk.resize(g.size());
     fk.resize(g.size());
     Fpzkdk.resize(g.size());
 
+    reshis_file.open("rehis.txt");
+    normEk_file.open("normEk.txt");
+    rk_file.open("rk.txt");
+
     newton_file.open("newton.txt");
-    quasi_file.open("quasi_newton.txt");
+    simpl_file.open("simpl_newton.txt");
     forsgren_file.open("forsgren.txt");
 
     newton_file << "time-step\titeration\t"
@@ -152,7 +158,7 @@ gmx::Ilves::Ilves(molecule_t *const mol) : mol(mol) {
                    "||lagr-newton - current_lagr||\t"
                    "||lagr-newton - current-lagr||/||lagr-newton||";
 
-    quasi_file << "time-step\titeration\t"
+    simpl_file << "time-step\titeration\t"
                   "||lagr-newton||\ttau\t"
                   "||lagr-correction-iter||\t||current-lagr||\t"
                   "||lagr-newton - current_lagr||\t"
@@ -167,19 +173,19 @@ gmx::Ilves::Ilves(molecule_t *const mol) : mol(mol) {
     times_file.open("times.txt");
 
     micros_newton = 0;
-    micros_quasi = 0;
+    micros_simpl = 0;
     micros_forsgren = 0;
 
     iters_newton = 0;
-    iters_quasi = 0;
+    iters_simpl = 0;
     iters_forsgren = 0;
 }
 
 gmx::Ilves::~Ilves() {
-    times_file << "newton\tquasi\tforsgren\n";
-    times_file << micros_newton << "\t" << micros_quasi << "\t"
+    times_file << "newton\tsimpl\tforsgren\n";
+    times_file << micros_newton << "\t" << micros_simpl << "\t"
                << micros_forsgren << "\n";
-    times_file << iters_newton << "\t" << iters_quasi << "\t" << iters_forsgren
+    times_file << iters_newton << "\t" << iters_simpl << "\t" << iters_forsgren
                << "\n";
 }
 
@@ -256,6 +262,175 @@ void gmx::Ilves::pbc_rvec_sub(const t_pbc *const pbc,
     }
 }
 
+bool gmx::Ilves::solve_6_2_2(const ArrayRef<const RVec> x,
+                             const ArrayRef<const RVec> xprime,
+                             const ArrayRef<const RVec> vprime,
+                             const real tol,
+                             const int maxit,
+                             const tensor virial,
+                             const t_pbc *const pbc) {
+    std::vector<real> z = current_lagr;
+
+    std::vector<RVec> xprime_initial(mol->m);
+    std::vector<RVec> vprime_initial(mol->m);
+    tensor virial_initial;
+
+    backup(xprime, vprime, virial, xprime_initial, vprime_initial, virial_initial);
+
+    std::vector<RVec> xprime_back(mol->m);
+    std::vector<RVec> vprime_back(mol->m);
+    tensor virial_back;
+
+    // Get the reference solution.
+    bool success;
+    {
+        int niters;
+        backup(xprime, vprime, virial, xprime_back, vprime_back, virial_back);
+        success = solve_newton(0,
+                               niters,
+                               x,
+                               xprime_back,
+                               vprime_back,
+                               tol,
+                               maxit,
+                               1,
+                               false,
+                               virial_back,
+                               false,
+                               pbc,
+                               false);
+        std::swap(z, current_lagr);
+    }
+
+    // Compute g(x). Update x_ab and xprime_ab.
+    real tau = make_g(pbc, x, xprime_initial, true);
+
+    real max_g = 0;
+    for (size_t row = 0; row < g.size(); ++row) {
+        max_g = std::max(max_g, std::abs(g[row]));
+    }
+
+    // Corrections.
+    std::vector<real> sk(mol->n);   // Newton method
+    std::vector<real> tk(mol->n);   // Quasi-newton method
+
+    // Lagrange multipliers.
+    std::vector<real> xk(mol->n, 0);   // Newton method
+    std::vector<real> yk(mol->n, 0);   // Quasi-newton method
+
+    real norm_z = ::norm2(z);
+
+    fprintf(stderr, "max-rel-error-squared-quasi-init\n");
+    fprintf(stderr, "%E\n", tau);
+    fprintf(stderr, "||z||\n");
+    fprintf(stderr, "%E\n", norm_z);
+    fprintf(stderr,
+            "k\t||xk||\t||sk||\t||yk||\t||tk||\t||Ek||\t||z - yk||\t||z - "
+            "yk||/||z||\tmax-rel-error-squared-quasi-k\n");
+
+    // Do at most MAXIT Newton steps.
+    for (int i = 0; i < maxit && tol < tau; ++i) {
+        /*
+         * Newton method.
+         */
+
+        // Construct A.
+        make_A_asym(A_newton);
+
+        // Solve the linear system.
+        LU(A_newton);
+        forward_LU(A_newton);
+        backward_LU(A_newton);
+
+        // Store the correction of the lagrange multiplier
+        sk = g;
+
+        // Restore gx.
+        make_g(pbc, x, xprime_initial, false);
+
+        /*
+         * Quasi-newton method.
+         */
+
+        // Construct A.
+        make_A_sym(A_quasi);
+
+        // Solve the linear system.
+        cholesky(A_quasi);
+        forward_cholesky(A_quasi);
+        backward_cholesky(A_quasi);
+
+        // Store the correction of the lagrange multiplier
+        tk = g;
+
+        for (size_t row = 0; row < g.size(); ++row) {
+            current_lagr[row] = (i == 0) ? g[row] : current_lagr[row] + g[row];
+        }
+
+        // Print results
+        real norm_xk = ::norm2(xk);
+        real norm_sk = ::norm2(sk);
+
+        real norm_yk = ::norm2(yk);
+        real norm_tk = ::norm2(tk);
+
+        real norm_sk_tk = ::norm2(sk, tk);
+
+        real norm_z_yk = ::norm2(z, yk);
+
+        real Ek = norm_sk_tk / norm_sk;
+
+        reshis_file << std::setprecision(17) << max_g << "\t";
+        normEk_file << std::setprecision(17) << Ek << "\t";
+        rk_file << std::setprecision(17) << norm_z_yk / norm_z << "\t";
+
+        fprintf(stderr,
+                "%d\t%E\t%E\t%E\t%E\t%E\t%E\t%E\t%E\n",
+                i,
+                norm_xk,
+                norm_sk,
+                norm_yk,
+                norm_tk,
+                Ek,
+                norm_z_yk,
+                norm_z_yk / norm_z,
+                tau);
+
+        // Update the lagrange multipliers.
+        for (size_t bond = 0; bond < g.size(); ++bond) {
+            yk[bond] += tk[bond];
+            xk[bond] += sk[bond];
+        }
+
+        // Update the atoms position.
+        update_positions(xprime_initial);
+
+        // Compute g(x). Update xprime_ab.
+        tau = make_g(pbc, x, xprime_initial, false);
+
+        max_g = 0;
+        for (size_t row = 0; row < g.size(); ++row) {
+            max_g = std::max(max_g, std::abs(g[row]));
+        }
+    }
+    // error = tau;
+
+    real norm_z_yk = ::norm2(z, yk);
+
+    reshis_file << std::setprecision(17) << max_g << "\t";
+    rk_file << std::setprecision(17) << norm_z_yk / norm_z << "\t";
+
+    reshis_file << "\n";
+    normEk_file << "\n";
+    rk_file << "\n";
+
+    reshis_file.flush();
+    normEk_file.flush();
+    rk_file.flush();
+
+    return tau < tol;
+}
+
 bool gmx::Ilves::solve_newton(const int time_step,
                               int &niters,
                               const ArrayRef<const RVec> x,
@@ -317,7 +492,7 @@ bool gmx::Ilves::solve_newton(const int time_step,
     return tau < tol;
 }
 
-bool gmx::Ilves::solve_quasi(const int time_step,
+bool gmx::Ilves::solve_simpl(const int time_step,
                              int &niters,
                              const ArrayRef<const RVec> x,
                              const ArrayRef<RVec> xprime,
@@ -335,20 +510,20 @@ bool gmx::Ilves::solve_quasi(const int time_step,
     // Compute g(x). Update x_ab and xprime_ab.
     real tau = make_g(pbc, x, xprime, true);
     if (print_results) {
-        print_to_file(quasi_file, time_step, -1, tau);
+        print_to_file(simpl_file, time_step, -1, tau);
     }
 
     // Construct A.
-    make_A_sym(A_quasi);
+    make_A_sym(A_simpl);
     // Solve the linear system.
-    cholesky(A_quasi);
+    cholesky(A_simpl);
 
     // Do at most MAXIT Newton steps.
     for (int i = 0; i < maxit && tol < tau; ++i) {
         ++niters;
 
-        forward_cholesky(A_quasi);
-        backward_cholesky(A_quasi);
+        forward_cholesky(A_simpl);
+        backward_cholesky(A_simpl);
 
         // Update the lagrange multipliers.
         for (size_t bond = 0; bond < g.size(); ++bond) {
@@ -361,7 +536,7 @@ bool gmx::Ilves::solve_quasi(const int time_step,
         tau = make_g(pbc, x, xprime, false);
 
         if (print_results) {
-            print_to_file(quasi_file, time_step, i, tau);
+            print_to_file(simpl_file, time_step, i, tau);
         }
     }
 
@@ -465,22 +640,22 @@ bool gmx::Ilves::solve_forsgren(const int time_step,
     return tau < tol;
 }
 
-bool gmx::Ilves::solve_all(int time_step,
-                           int &,   // niters, unused.
-                           ArrayRef<const RVec> x,
-                           ArrayRef<RVec> xprime,
-                           ArrayRef<RVec> vprime,
-                           real tol,
-                           int maxit,
-                           real deltat,
-                           bool constraint_virial,
-                           tensor virial,
-                           bool constraint_velocities,
-                           const t_pbc *pbc,
-                           bool print_results) {
+bool gmx::Ilves::solve_6_2_3(int time_step,
+                             int &,   // niters, unused.
+                             ArrayRef<const RVec> x,
+                             ArrayRef<RVec> xprime,
+                             ArrayRef<RVec> vprime,
+                             real tol,
+                             int maxit,
+                             real deltat,
+                             bool constraint_virial,
+                             tensor virial,
+                             bool constraint_velocities,
+                             const t_pbc *pbc,
+                             bool print_results) {
     if (print_results) {
         newton_file << "\n";
-        quasi_file << "\n";
+        simpl_file << "\n";
         forsgren_file << "\n";
     }
 
@@ -558,7 +733,7 @@ bool gmx::Ilves::solve_all(int time_step,
 
         int niters;
         auto start = std::chrono::steady_clock::now();
-        solve_quasi(time_step,
+        solve_simpl(time_step,
                     niters,
                     x,
                     xprime_back,
@@ -572,9 +747,9 @@ bool gmx::Ilves::solve_all(int time_step,
                     pbc,
                     print_results);
         auto end = std::chrono::steady_clock::now();
-        micros_quasi += std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+        micros_simpl += std::chrono::duration_cast<std::chrono::microseconds>(end - start)
                             .count();
-        iters_quasi += niters;
+        iters_simpl += niters;
     }
     //--------------------------------------------------------------------------
     {
@@ -610,7 +785,7 @@ bool gmx::Ilves::solve_all(int time_step,
 
     // if (print_results) {
     //     newton_file.flush();
-    //     quasi_file.flush();
+    //     simpl_file.flush();
     //     forsgren_file.flush();
     // }
 

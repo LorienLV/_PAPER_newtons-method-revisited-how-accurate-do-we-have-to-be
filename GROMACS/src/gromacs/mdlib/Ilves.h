@@ -76,7 +76,7 @@ public:
 
     /**
      * Try to solve the bond constraints of MOL in at most MAXIT iterations of
-     * Quasi-Newtons's method with a tolerance for each atom of TOL.
+     * the Simplified Newtons's method with a tolerance for each atom of TOL.
      *
      * @param time_step The time step.
      * @param niters When returning, NITERS will contain the total number of
@@ -104,7 +104,7 @@ public:
      * @param print_results Print accuracy results?
      * @return True if the constraints has been satisfied, false otherwise.
      */
-    bool solve_quasi(int time_step,
+    bool solve_simpl(int time_step,
                      int &niters,
                      ArrayRef<const RVec> x,
                      ArrayRef<RVec> xprime,
@@ -162,10 +162,11 @@ public:
                         const t_pbc *pbc,
                         bool print_results);
 
+
     /**
      * Try to solve the bond constraints of MOL in at most MAXIT iterations of
-     * Newton's, Quasi-Newton's and Forsgren's (all-three) methods with a
-     * tolerance for each atom of TOL.
+     * Quasi-Newton's methods with a tolerance for each atom of TOL.
+     * This function is used to generate the data described in section 6.2.2.
      *
      * @param time_step The time step.
      * @param niters When returning, NITERS will contain the total number of
@@ -193,37 +194,62 @@ public:
      * @param print_results Print accuracy results?
      * @return True if the constraints has been satisfied, false otherwise.
      */
-    bool solve_all(int time_step,
-                   int &niters,
-                   ArrayRef<const RVec> x,
-                   ArrayRef<RVec> xprime,
-                   ArrayRef<RVec> vprime,
-                   real tol,
-                   int maxit,
-                   real deltat,
-                   bool constraint_virial,
-                   tensor virial,
-                   bool constraint_velocities,
-                   const t_pbc *pbc,
-                   bool print_results);
+    bool solve_6_2_2(ArrayRef<const RVec> x,
+                     ArrayRef<const RVec> xprime,
+                     ArrayRef<const RVec> vprime,
+                     real tol,
+                     int maxit,
+                     const tensor virial,
+                     const t_pbc *pbc);
+
+    /**
+     * Try to solve the bond constraints of MOL in at most MAXIT iterations of
+     * Newton's, Simplified-Newton's and Forsgren's (all-three) methods with a
+     * tolerance for each atom of TOL. This function is used to generate the data
+     * described in section 6.2.3.
+     *
+     * @param time_step The time step.
+     * @param niters When returning, NITERS will contain the total number of
+     * iterations executed by the solver.
+     *
+     * @param x Positions of the atoms before computing the external forces,
+     * with the following format:
+     *
+     * atom 1     atom 2     atom 3
+     * x, y, z,   x, y, z,   x, y, z
+     *
+     * @param xprime Positions of the atoms after computing the external forces,
+     * with the same format as x. When returning, it will contain the final
+     * position of each atom.
+     * @param vprime The atoms velocities. When returning, it will contain the
+     * final velocity of each atom.
+     * @param tol Maximum error allowed in each atom position.
+     * @param maxit Maximum number of iterations the solver can execute.
+     * @param deltat The time-step in picoseconds.
+     * @param constraint_virial Update the virial?
+     * @param virial sum r x m delta_r (virial)
+     * @param constraint_velocities Update the velocities?
+     * @param pbc The PBC (container) information. Null if there is no PBC
+     * information.
+     * @param print_results Print accuracy results?
+     * @return True if the constraints has been satisfied, false otherwise.
+     */
+    bool solve_6_2_3(int time_step,
+                     int &niters,
+                     ArrayRef<const RVec> x,
+                     ArrayRef<RVec> xprime,
+                     ArrayRef<RVec> vprime,
+                     real tol,
+                     int maxit,
+                     real deltat,
+                     bool constraint_virial,
+                     tensor virial,
+                     bool constraint_velocities,
+                     const t_pbc *pbc,
+                     bool print_results);
 
 private:
     molecule_t *mol;   // The molecule structure.
-
-    // Output files.
-    std::ofstream newton_file;
-    std::ofstream quasi_file;
-    std::ofstream forsgren_file;
-
-    // Times.
-    int micros_newton;
-    int micros_quasi;
-    int micros_forsgren;
-    // Number of iteration.
-    int iters_newton;
-    int iters_quasi;
-    int iters_forsgren;
-    std::ofstream times_file;
 
     // CRS sparse matrix.
     struct CRS {
@@ -251,9 +277,33 @@ private:
                                      // the matrix (also fillins).
     };
 
-    // Coefficient matrices.
+    // START Experiments 6.2.2
     CRS A_newton;
     CRS A_quasi;
+
+    std::ofstream reshis_file;
+    std::ofstream normEk_file;
+    std::ofstream rk_file;
+    // END
+
+    // START Experiments 6.2.3
+    // Output files.
+    std::ofstream newton_file;
+    std::ofstream simpl_file;
+    std::ofstream forsgren_file;
+
+    // Times.
+    int micros_newton;
+    int micros_simpl;
+    int micros_forsgren;
+    // Number of iteration.
+    int iters_newton;
+    int iters_simpl;
+    int iters_forsgren;
+    std::ofstream times_file;
+
+    // Coefficient matrices.
+    CRS A_simpl;
     CRS A_forsgren_init;
     CRS A_forsgren;
 
@@ -261,6 +311,7 @@ private:
     std::vector<real> dk;
     std::vector<real> fk;
     std::vector<real> Fpzkdk;
+    // END
 
     // Independent term vector. This vector will hold the lagrange multipliers
     // at the end of an ILVES iteration.
