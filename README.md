@@ -135,4 +135,4 @@ gmx_d mdrun -ntmpi 1 -s "tpr.tpr" -noconfout -nsteps 50000 -g gromacs.log
 The performance simulations will produce one file named `times.txt`. The file contains one column per solver. The first line displays the total microseconds taken by each solver, and the second line the total number of iterations executed by each solver.
 
 # How to cite us
-TODO: When the manuscript has been accepted and the infomation is available.
+TODO: When the manuscript has been accepted and the information is available.
