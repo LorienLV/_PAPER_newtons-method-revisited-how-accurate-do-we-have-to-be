@@ -83,9 +83,10 @@ gmx_d mdrun -ntmpi 1 -s "tpr.tpr" -noconfout -nsteps 50000 -g gromacs.log
 ```
 
 This simulation will produce three files:
-    - `rehis.txt`: The evolution of the maximum relative constraint violation. There is one line per time-step and one column per iteration.
-    - `rk.txt`: The evolution of ||Ek||. There is one line per time-step and one column per iteration.
-    - `normEk.txt`: The evolution of ||z - yk|| / ||z||. There is one line per time-step and one column per iteration.
+
+ - `rehis.txt`: The evolution of the maximum relative constraint violation. There is one line per time-step and one column per iteration.
+ - `rk.txt`: The evolution of ||Ek||. There is one line per time-step and one column per iteration.
+ - `normEk.txt`: The evolution of ||z - yk|| / ||z||. There is one line per time-step and one column per iteration.
 
 These output files are used to generate Figure 2 and Figure 3.
 
