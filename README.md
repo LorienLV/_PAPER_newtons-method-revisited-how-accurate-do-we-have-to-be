@@ -1,6 +1,6 @@
 # [PAPER] Newton's method revisited: How accurate do we have to be?
 
-This repository contains the code used to generate the data for Figures 1, 2, 3, 4, 5, and 6 of the paper titled [Newton's method revisited: How accurate do we have to be?](TODO). What can you find in this repository?
+This repository contains the code used to generate the data for Figures 1, 2, 3, 4, 5, and 6 of the paper titled [Newton's method revisited: How accurate do we have to be?](https://onlinelibrary.wiley.com/doi/10.1002/cpe.7853#). What can you find in this repository?
 
 1. The MATLAB codes necessary to compute square roots and generate Figure 1. MATLAB is a commercial product and the property of MathWorks, hence it cannot be included in this repository. MATLAB Version: 9.9.0.1495850 (R2020b) Update 1 was used to generate Figures 1, 2a, 2b, and 3.
 2. The data and MATLAB codes required to generate Figures 2a, 2b, and 3.
@@ -135,5 +135,19 @@ gmx_d mdrun -ntmpi 1 -s "tpr.tpr" -noconfout -nsteps 50000 -g gromacs.log
 
 The performance simulations will produce one file named `times.txt`. The file contains one column per solver. The first line displays the total microseconds taken by each solver, and the second line the total number of iterations executed by each solver.
 
-# How to cite us
-TODO: When the manuscript has been accepted and the information is available.
+# Cite us
+
+> **Carl Christian Kjelgaard Mikkelsen, Lorién López-Villellas, and Pablo García-Risueño** *Newton's method revisited: How accurate do we have to be?*, Concurrency And Computation: Practice And Experience.
+
+```
+@article{KjelgaardMikkelsen2023,
+  doi = {10.1002/cpe.7853},
+  url = {https://doi.org/10.1002/cpe.7853},
+  year = {2023},
+  month = jul,
+  publisher = {Wiley},
+  author = {Carl Christian Kjelgaard Mikkelsen and Lori{\'{e}}n L{\'{o}}pez-Villellas and Pablo Garc{\'{\i}}a-Risue{\~{n}}o},
+  title = {Newton{\textquotesingle}s method revisited: How accurate do we have to be?},
+  journal = {Concurrency and Computation: Practice and Experience}
+}
+```
